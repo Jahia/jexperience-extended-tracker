@@ -1,0 +1,77 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.4.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.4",
+  "version": 1,
+  "serialNumber": "urn:uuid:814d1a6e-6db5-45d8-9659-e9825fbdee8f",
+  "metadata": {
+    "timestamp": "2025-07-02T15:50:12.265Z",
+    "tools": [
+      {
+        "vendor": "@cyclonedx",
+        "name": "webpack-plugin",
+        "version": "3.17.0",
+        "externalReferences": [
+          {
+            "url": "git+https://github.com/CycloneDX/cyclonedx-webpack-plugin.git",
+            "type": "vcs",
+            "comment": "as detected from PackageJson property \"repository.url\""
+          },
+          {
+            "url": "https://github.com/CycloneDX/cyclonedx-webpack-plugin#readme",
+            "type": "website",
+            "comment": "as detected from PackageJson property \"homepage\""
+          },
+          {
+            "url": "https://github.com/CycloneDX/cyclonedx-webpack-plugin/issues",
+            "type": "issue-tracker",
+            "comment": "as detected from PackageJson property \"bugs.url\""
+          }
+        ]
+      },
+      {
+        "vendor": "@cyclonedx",
+        "name": "cyclonedx-library",
+        "version": "6.13.1",
+        "externalReferences": [
+          {
+            "url": "git+https://github.com/CycloneDX/cyclonedx-javascript-library.git",
+            "type": "vcs",
+            "comment": "as detected from PackageJson property \"repository.url\""
+          },
+          {
+            "url": "https://github.com/CycloneDX/cyclonedx-javascript-library#readme",
+            "type": "website",
+            "comment": "as detected from PackageJson property \"homepage\""
+          },
+          {
+            "url": "https://github.com/CycloneDX/cyclonedx-javascript-library/issues",
+            "type": "issue-tracker",
+            "comment": "as detected from PackageJson property \"bugs.url\""
+          }
+        ]
+      }
+    ],
+    "component": {
+      "type": "library",
+      "name": "jexperience-extended-tracker",
+      "version": "1.0.0-SNAPSHOT",
+      "bom-ref": "pkg:npm/jexperience-extended-tracker@1.0.0-SNAPSHOT",
+      "description": "jExperience extended tracker",
+      "licenses": [
+        {
+          "license": {
+            "name": "SEE LICENSE IN pom.xml"
+          }
+        }
+      ],
+      "purl": "pkg:npm/jexperience-extended-tracker@1.0.0-SNAPSHOT"
+    }
+  },
+  "components": [],
+  "dependencies": [
+    {
+      "ref": "pkg:npm/jexperience-extended-tracker@1.0.0-SNAPSHOT"
+    }
+  ]
+}

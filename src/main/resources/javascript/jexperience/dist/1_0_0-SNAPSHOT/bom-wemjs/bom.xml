@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bom xmlns="http://cyclonedx.org/schema/bom/1.4" version="1" serialNumber="urn:uuid:814d1a6e-6db5-45d8-9659-e9825fbdee8f">
+  <metadata>
+    <timestamp>2025-07-02T15:50:12.265Z</timestamp>
+    <tools>
+      <tool>
+        <vendor>@cyclonedx</vendor>
+        <name>webpack-plugin</name>
+        <version>3.17.0</version>
+        <externalReferences>
+          <reference type="vcs">
+            <url>git+https://github.com/CycloneDX/cyclonedx-webpack-plugin.git</url>
+            <comment>as detected from PackageJson property "repository.url"</comment>
+          </reference>
+          <reference type="website">
+            <url>https://github.com/CycloneDX/cyclonedx-webpack-plugin#readme</url>
+            <comment>as detected from PackageJson property "homepage"</comment>
+          </reference>
+          <reference type="issue-tracker">
+            <url>https://github.com/CycloneDX/cyclonedx-webpack-plugin/issues</url>
+            <comment>as detected from PackageJson property "bugs.url"</comment>
+          </reference>
+        </externalReferences>
+      </tool>
+      <tool>
+        <vendor>@cyclonedx</vendor>
+        <name>cyclonedx-library</name>
+        <version>6.13.1</version>
+        <externalReferences>
+          <reference type="vcs">
+            <url>git+https://github.com/CycloneDX/cyclonedx-javascript-library.git</url>
+            <comment>as detected from PackageJson property "repository.url"</comment>
+          </reference>
+          <reference type="website">
+            <url>https://github.com/CycloneDX/cyclonedx-javascript-library#readme</url>
+            <comment>as detected from PackageJson property "homepage"</comment>
+          </reference>
+          <reference type="issue-tracker">
+            <url>https://github.com/CycloneDX/cyclonedx-javascript-library/issues</url>
+            <comment>as detected from PackageJson property "bugs.url"</comment>
+          </reference>
+        </externalReferences>
+      </tool>
+    </tools>
+    <component type="library" bom-ref="pkg:npm/jexperience-extended-tracker@1.0.0-SNAPSHOT">
+      <name>jexperience-extended-tracker</name>
+      <version>1.0.0-SNAPSHOT</version>
+      <description>jExperience extended tracker</description>
+      <licenses>
+        <license>
+          <name>SEE LICENSE IN pom.xml</name>
+        </license>
+      </licenses>
+      <purl>pkg:npm/jexperience-extended-tracker@1.0.0-SNAPSHOT</purl>
+    </component>
+  </metadata>
+  <components/>
+  <dependencies>
+    <dependency ref="pkg:npm/jexperience-extended-tracker@1.0.0-SNAPSHOT"/>
+  </dependencies>
+</bom>

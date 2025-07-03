@@ -1,0 +1,25 @@
+{
+  "$id": "https://jexperience.jahia.com/schemas/json/events/contentVisible/target/1-0-0",
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "self": {
+    "vendor": "org.jahia.modules.jexperience",
+    "name": "contentVisibleEventTarget",
+    "format": "jsonschema",
+    "version": "1-0-0"
+  },
+  "title": "ContentVisibleEventTarget",
+  "type": "object",
+  "properties": {
+    "itemId": {
+      "type": "string"
+    },
+    "itemType": {
+      "type": "string"
+    },
+    "scope": {
+      "type": "string",
+      "validateScope": true
+    }
+  },
+  "unevaluatedProperties": false
+}
