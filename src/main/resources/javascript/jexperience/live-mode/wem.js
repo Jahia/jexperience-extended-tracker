@@ -32,12 +32,21 @@ waitForWemInit()
         const oldWem = window.wem || {};
         window.wem = {
             ...oldWem,
+            // Scroll depth tracking
             scrollDepthReached: {},
+            // Track time on page using Page Visibility API
             pageViewStartTime: Date.now(),
+            visibleTime: 0,
+            lastVisibilityChange: Date.now(),
+            isPageVisible: true,
+            // Initialize queue and batch size
             queue: [],
             batchSize: 10, // Number of events to batch before sending
+            // Track read depth markers
             readDepthMarkers: {},
+            // Default content visibility selectors
             contentVisibilitySelectors: ['.track-visibility', 'article', '.product', '.hero', '.cta'],
+            // Default download file types
             downloadFileTypes: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', 'rar', 'exe', 'dmg'],
             trackEvent: (eventName, eventData, target) => {
                 const buildEvent = window.wem.buildEvent(eventName,
@@ -69,6 +78,8 @@ waitForWemInit()
                 }
             },
             initExtendedTracker: function () {
+                // Initialize visibility tracking
+                document.addEventListener('visibilitychange', window.wem._handleVisibilityChange);
                 // Put a marker to be able to know when wem is fully loaded, context is loaded, and callbacks have been executed.
                 window.wem._registerCallback(() => {
                     window.wem._setupContentVisibilityTracking();
@@ -81,17 +92,56 @@ waitForWemInit()
                     window.wem._setupDownloadTracking();
                     window.wem._setupCopyActionTracking();
                     setInterval(window.wem.processBatch, 3000); // Process events every 3 seconds
-                    window.addEventListener('beforeunload', window.wem._trackTimeOnPage);
                 }, 'jExperience extended tracker fully loaded', 121);
             },
 
-            _trackTimeOnPage: () => {
-                const timeSpent = Date.now() - window.wem.pageViewStartTime;
+            _handleVisibilityChange: () => {
+                const now = Date.now();
+
+                if (document.hidden) {
+                    // Page becoming hidden - accumulate visible time and send tracking event
+                    if (window.wem.isPageVisible) {
+                        const sessionDuration = now - window.wem.lastVisibilityChange;
+                        window.wem.visibleTime += sessionDuration;
+                        window.wem.isPageVisible = false;
+
+                        // Send tracking event when user leaves/hides the page
+                        window.wem._sendTimeOnPageEvent(window.wem.visibleTime);
+                    }
+                } else {
+                    // Page becoming visible
+                    window.wem.isPageVisible = true;
+
+                    // No need to accumulate time here, just update the timestamp
+                }
+
+                window.wem.lastVisibilityChange = now;
+            },
+
+            _sendTimeOnPageEvent: timeSpent => {
                 window.wem.trackEvent('timeOnPage', {
-                    milliseconds: timeSpent,
-                    seconds: Math.floor(timeSpent / 1000)
+                    activeTime: timeSpent,
+                    activeTimeSeconds: Math.floor(timeSpent / 1000),
+                    totalTime: Date.now() - window.wem.pageViewStartTime,
+                    totalTimeSeconds: Math.floor((Date.now() - window.wem.pageViewStartTime) / 1000),
+                    sessionStartTime: window.wem.pageViewStartTime,
+                    lastVisibilityChange: window.wem.lastVisibilityChange,
+                    isVisible: window.wem.isPageVisible
                 });
-                window.wem.processBatch(); // Force processing before page unload
+
+                // Process batch immediately to ensure data is sent
+                window.wem.processBatch();
+            },
+
+            _trackTimeOnPage: () => {
+                let timeSpent = window.wem.visibleTime;
+
+                // Add time from current visibility session if page is visible
+                if (window.wem.isPageVisible) {
+                    timeSpent += (Date.now() - window.wem.lastVisibilityChange);
+                }
+
+                window.wem._sendTimeOnPageEvent(timeSpent);
             },
 
             _setupContentVisibilityTracking: () => {
@@ -404,7 +454,64 @@ waitForWemInit()
                         }
                     }
                 });
-            }
+            },
+
+            collectEvents: function(data) {
+                // Use Beacon API for more reliable sending, especially during page transitions
+                if (navigator.sendBeacon) {
+                    const endpoint = window.wem.contextServerUrl + '/eventcollector';
+
+                    if (!endpoint) {
+                        console.warn('jExperience tracker: No endpoint URL found in digitalData');
+                        return false;
+                    }
+
+                    // Prepare payload
+                    const payload = {
+                        events: data.events || [],
+                        sessionId: window.wem.getSessionId() || this.getCookie(window.digitalData.wemInitConfig.trackerSessionIdCookieName),
+                    };
+
+                    // Add consent data if available
+                    if (window.wem.consent) {
+                        payload.consent = window.wem.consent;
+                    }
+
+                    // Use sendBeacon which works reliably during page unload
+                    const success = navigator.sendBeacon(
+                        endpoint,
+                        new Blob([JSON.stringify(payload)], {type: 'application/json'})
+                    );
+
+                    if (!success) {
+                        // Fallback to traditional XHR if beacon fails
+                        return this._sendEventsXHR(endpoint, payload);
+                    }
+
+                    return true;
+                } else {
+                    // Fallback for browsers that don't support Beacon API
+                    return this._sendEventsXHR(
+                        window.wem.contextServerUrl + '/eventcollector',
+                        data
+                    );
+                }
+            },
+
+            // Fallback method for older browsers
+            _sendEventsXHR: function(url, data) {
+                try {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', url, true);
+                    xhr.setRequestHeader('Content-Type', 'application/json');
+                    xhr.withCredentials = true;
+                    xhr.send(JSON.stringify(data));
+                    return true;
+                } catch (e) {
+                    console.error('Failed to send events via XHR:', e);
+                    return false;
+                }
+            },
         };
         console.log('Loaded jExperience extended tracker...');
     }).catch(error => {
