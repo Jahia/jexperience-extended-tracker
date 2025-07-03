@@ -50,7 +50,7 @@ Tracks when users copy content:
 - Includes preview of copied content
 
 #### Time on Page Tracking
-Measures how long users spend on the page:
+Measures how long users spend on the page using [Page Visibility API](https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API):
 - Starts timer on page load
 - Records duration in milliseconds and seconds on page exit
 
@@ -65,6 +65,11 @@ window.wem.trackEvent('customEvent', {
   customProperty: 'value'
 }, optionalTargetElement);
 ```
+## Beacon Events
+The library supports sending events using the [Beacon API](https://developer.mozilla.org/en-US/docs/Web/API/Beacon_API) for efficient background data transmission.
+
+It overrides window.wem.collectEvents to batch events and send them using the Beacon API when the page is unloaded or when the batch size is reached.
+
 
 ## Configuration
 

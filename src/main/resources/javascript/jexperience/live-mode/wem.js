@@ -48,6 +48,18 @@ waitForWemInit()
             contentVisibilitySelectors: ['.track-visibility', 'article', '.product', '.hero', '.cta'],
             // Default download file types
             downloadFileTypes: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', 'rar', 'exe', 'dmg'],
+            getState: () => {
+                if (document.visibilityState === 'hidden') {
+                    return 'hidden';
+                }
+
+                if (document.hasFocus()) {
+                    return 'active';
+                }
+
+                return 'passive';
+            },
+
             trackEvent: (eventName, eventData, target) => {
                 const buildEvent = window.wem.buildEvent(eventName,
                     target ? window.wem.buildTarget(target.id || target.className, target.tagName.toLowerCase()) : window.wem.buildTarget('page', 'body'),
@@ -77,11 +89,47 @@ waitForWemInit()
                     window.wem.collectEvents({events: batch});
                 }
             },
-            initExtendedTracker: function () {
-                // Initialize visibility tracking
-                document.addEventListener('visibilitychange', window.wem._handleVisibilityChange);
+            initExtendedTracker: () => {
                 // Put a marker to be able to know when wem is fully loaded, context is loaded, and callbacks have been executed.
                 window.wem._registerCallback(() => {
+                    window.wem.state = window.wem.getState();
+                    // Accepts a next state and, if there's been a state change, logs the
+                    // change to the console. It also updates the `state` value defined above.
+                    const logStateChange = nextState => {
+                        const prevState = window.wem.state;
+                        if (nextState !== prevState) {
+                            console.log(`State change: ${prevState} >>> ${nextState}`);
+                            window.wem.state = nextState;
+                        }
+                    };
+
+                    // Options used for all event listeners.
+                    const opts = {capture: true};
+
+                    // These lifecycle events can all use the same listener to observe state
+                    // changes (they call the `getState()` function to determine the next state).
+                    ['pageshow', 'focus', 'blur', 'visibilitychange', 'resume'].forEach(type => {
+                        window.addEventListener(type, () => logStateChange(window.wem.getState()), opts);
+                    });
+
+                    // The next two listeners, on the other hand, can determine the next
+                    // state from the event itself.
+                    window.addEventListener('freeze', () => {
+                        // In the freeze event, the next state is always frozen.
+                        logStateChange('frozen');
+                    }, opts);
+
+                    window.addEventListener('pagehide', event => {
+                        // If the event's persisted property is `true` the page is about
+                        // to enter the back/forward cache, which is also in the frozen state.
+                        // If the event's persisted property is not `true` the page is
+                        // about to be unloaded.
+                        logStateChange(event.persisted ? 'frozen' : 'terminated');
+                    }, opts);
+                    // Initialize visibility tracking
+                    document.addEventListener('visibilitychange', window.wem._handleVisibilityChange, opts);
+                    // During pagehide page is still visible, so we need to handle it separately, to ensure we track time correctly
+                    document.addEventListener('pagehide', window.wem._handleTerminated, opts);
                     window.wem._setupContentVisibilityTracking();
                     window.wem._detectScrollDepth(0.25, () => window.wem.trackEvent('scrollDepth', {depth: '25%'}));
                     window.wem._detectScrollDepth(0.50, () => window.wem.trackEvent('scrollDepth', {depth: '50%'}));
@@ -116,6 +164,17 @@ waitForWemInit()
                 }
 
                 window.wem.lastVisibilityChange = now;
+            },
+
+            _handleTerminated: () => {
+                const now = Date.now();
+
+                const sessionDuration = now - window.wem.lastVisibilityChange;
+                window.wem.visibleTime += sessionDuration;
+                window.wem.isPageVisible = false;
+
+                // Send tracking event when user leaves/hides the page
+                window.wem._sendTimeOnPageEvent(window.wem.visibleTime);
             },
 
             _sendTimeOnPageEvent: timeSpent => {
@@ -456,7 +515,7 @@ waitForWemInit()
                 });
             },
 
-            collectEvents: function(data) {
+            collectEvents: data => {
                 // Use Beacon API for more reliable sending, especially during page transitions
                 if (navigator.sendBeacon) {
                     const endpoint = window.wem.contextServerUrl + '/eventcollector';
@@ -469,7 +528,7 @@ waitForWemInit()
                     // Prepare payload
                     const payload = {
                         events: data.events || [],
-                        sessionId: window.wem.getSessionId() || this.getCookie(window.digitalData.wemInitConfig.trackerSessionIdCookieName),
+                        sessionId: window.wem.getSessionId() || this.getCookie(window.digitalData.wemInitConfig.trackerSessionIdCookieName)
                     };
 
                     // Add consent data if available
@@ -489,17 +548,17 @@ waitForWemInit()
                     }
 
                     return true;
-                } else {
-                    // Fallback for browsers that don't support Beacon API
-                    return this._sendEventsXHR(
-                        window.wem.contextServerUrl + '/eventcollector',
-                        data
-                    );
                 }
+
+                // Fallback for browsers that don't support Beacon API
+                return this._sendEventsXHR(
+                    window.wem.contextServerUrl + '/eventcollector',
+                    data
+                );
             },
 
             // Fallback method for older browsers
-            _sendEventsXHR: function(url, data) {
+            _sendEventsXHR: (url, data) => {
                 try {
                     const xhr = new XMLHttpRequest();
                     xhr.open('POST', url, true);
@@ -511,7 +570,7 @@ waitForWemInit()
                     console.error('Failed to send events via XHR:', e);
                     return false;
                 }
-            },
+            }
         };
         console.log('Loaded jExperience extended tracker...');
     }).catch(error => {
