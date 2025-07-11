@@ -77,6 +77,11 @@ waitForWemInit()
                     console.warn('jExperience tracker not initialized, event queued:', buildEvent);
                 }
 
+                // Remove duplicates by keeping the last event with the same name
+                window.wem.queue = window.wem.queue.filter((event, index, self) => {
+                    return index === self.findLastIndex(e => e.eventType === event.eventType);
+                });
+
                 // Process immediately if we've reached batch size
                 if (window.wem.queue.length >= window.wem.batchSize) {
                     window.wem.processBatch();
@@ -139,7 +144,7 @@ waitForWemInit()
                     window.wem._setupMediaInteractionTracking();
                     window.wem._setupDownloadTracking();
                     window.wem._setupCopyActionTracking();
-                    setInterval(window.wem.processBatch, 3000); // Process events every 3 seconds
+                    setInterval(window.wem.processBatch, 30000); // Process events every 30 seconds
                 }, 'jExperience extended tracker fully loaded', 121);
             },
 
