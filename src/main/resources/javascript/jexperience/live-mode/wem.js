@@ -45,9 +45,11 @@ waitForWemInit()
             // Track read depth markers
             readDepthMarkers: {},
             // Default content visibility selectors
-            contentVisibilitySelectors: ['.track-visibility', 'article', '.product', '.hero', '.cta'],
+            contentVisibilitySelectors: ['.track-visibility', 'article', '.product', '.hero', '.cta', '.cbp-item'],
             // Default download file types
             downloadFileTypes: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', 'rar', 'exe', 'dmg'],
+            // Allowed to duplicate events list
+            duplicateEvents: ['contentVisible', 'contentClick', 'mediaPlay', 'mediaPause', 'mediaComplete', 'contentCopy', 'download'],
             getState: () => {
                 if (document.visibilityState === 'hidden') {
                     return 'hidden';
@@ -73,15 +75,17 @@ waitForWemInit()
 
                 if (window.wem.queue) {
                     window.wem.queue.push(buildEvent);
+                    console.info('queue', window.wem.queue);
                 } else {
                     console.warn('jExperience tracker not initialized, event queued:', buildEvent);
                 }
 
                 // Remove duplicates by keeping the last event with the same name
                 window.wem.queue = window.wem.queue.filter((event, index, self) => {
-                    return index === self.findLastIndex(e => e.eventType === event.eventType);
+                    return (window.wem.duplicateEvents.findIndex(e => e === event.eventType) > -1) ||
+                        (index === self.findLastIndex(e => e.eventType === event.eventType && e.target.itemId === event.target.itemId && e.target.itemType === event.target.itemType));
                 });
-
+                console.info('queue after deduplicate', window.wem.queue);
                 // Process immediately if we've reached batch size
                 if (window.wem.queue.length >= window.wem.batchSize) {
                     window.wem.processBatch();
@@ -136,6 +140,7 @@ waitForWemInit()
                     // During pagehide page is still visible, so we need to handle it separately, to ensure we track time correctly
                     document.addEventListener('pagehide', window.wem._handleTerminated, opts);
                     window.wem._setupContentVisibilityTracking();
+                    window.wem._setupContentClickTracking();
                     window.wem._detectScrollDepth(0.25, () => window.wem.trackEvent('scrollDepth', {depth: '25%'}));
                     window.wem._detectScrollDepth(0.50, () => window.wem.trackEvent('scrollDepth', {depth: '50%'}));
                     window.wem._detectScrollDepth(0.75, () => window.wem.trackEvent('scrollDepth', {depth: '75%'}));
@@ -214,8 +219,9 @@ waitForWemInit()
                     entries.forEach(entry => {
                         if (entry.isIntersecting) {
                             const element = entry.target;
-                            window.wem.trackEvent('contentVisible', {}, element);
-                            // Optionally stop observing after first visibility
+                            const contentData = window.wem._extractContentSignature(element);
+                            window.wem.trackEvent('contentVisible', contentData, element);
+                            // Stop observing after first visibility
                             visibilityObserver.unobserve(element);
                         }
                     });
@@ -223,14 +229,38 @@ waitForWemInit()
                     threshold: 0.5 // Element is considered visible when 50% is in viewport
                 });
 
+                // Function to check if element is already visible
+                const isElementVisible = element => {
+                    const rect = element.getBoundingClientRect();
+                    const windowHeight = window.innerHeight || document.documentElement.clientHeight;
+
+                    // Calculate how much of the element is visible
+                    const visibleHeight = Math.min(rect.bottom, windowHeight) - Math.max(rect.top, 0);
+                    const visiblePercentage = visibleHeight / rect.height;
+                    console.log('isElementVisible', element, visiblePercentage, visibleHeight);
+                    // Return true if at least 50% is visible (matching observer threshold)
+                    return visiblePercentage >= 0.5;
+                };
+
+                // Function to handle elements (both existing and newly added)
+                const handleElement = element => {
+                    if (element.dataset.wemObserved) return;
+
+                    element.dataset.wemObserved = 'true';
+
+                    // If element is already visible, trigger event immediately
+                    if (isElementVisible(element)) {
+                        const contentData = window.wem._extractContentSignature(element);
+                        window.wem.trackEvent('contentVisible', contentData, element);
+                    } else {
+                        // Otherwise observe it
+                        visibilityObserver.observe(element);
+                    }
+                };
+
                 // Start observing elements matching configured selectors
                 window.wem.contentVisibilitySelectors.forEach(selector => {
-                    document.querySelectorAll(selector).forEach(element => {
-                        if (!element.dataset.wemObserved) {
-                            visibilityObserver.observe(element);
-                            element.dataset.wemObserved = 'true';
-                        }
-                    });
+                    document.querySelectorAll(selector).forEach(handleElement);
                 });
 
                 // Monitor for new elements
@@ -241,22 +271,13 @@ waitForWemInit()
                                 // Check if the node matches any selector
                                 if (window.wem.contentVisibilitySelectors.some(selector =>
                                     node.matches && node.matches(selector))) {
-                                    if (!node.dataset.wemObserved) {
-                                        visibilityObserver.observe(node);
-                                        node.dataset.wemObserved = 'true';
-                                    }
+                                    handleElement(node);
                                 }
 
                                 // Check child nodes
-
                                 window.wem.contentVisibilitySelectors.forEach(selector => {
                                     if (node.querySelectorAll) {
-                                        node.querySelectorAll(selector).forEach(element => {
-                                            if (!element.dataset.wemObserved) {
-                                                visibilityObserver.observe(element);
-                                                element.dataset.wemObserved = 'true';
-                                            }
-                                        });
+                                        node.querySelectorAll(selector).forEach(handleElement);
                                     }
                                 });
                             }
@@ -268,6 +289,53 @@ waitForWemInit()
                     childList: true,
                     subtree: true
                 });
+            },
+
+            _setupContentClickTracking: () => {
+                // Use event delegation to track clicks on all relevant elements
+                document.addEventListener('click', event => {
+                    // Find if the clicked element or any of its parents match our selectors
+                    let targetElement = event.target;
+                    let matchedElement = null;
+
+                    // Check if the element or any parent matches our visibility selectors
+                    while (targetElement && targetElement !== document.body) {
+                        if (window.wem.contentVisibilitySelectors.some(selector =>
+                            targetElement.matches && targetElement.matches(selector))) {
+                            matchedElement = targetElement;
+                            break;
+                        }
+                        targetElement = targetElement.parentElement;
+                    }
+
+                    // If we found a matching element, track the click
+                    if (matchedElement) {
+                        // Get the exact element that was clicked (for more detailed tracking)
+                        const clickedTag = event.target.tagName.toLowerCase();
+                        const isLink = event.target.tagName === 'A' || event.target.closest('a');
+                        const isButton = event.target.tagName === 'BUTTON' ||
+                            event.target.closest('button') ||
+                            event.target.getAttribute('role') === 'button';
+
+                        // Extract content signature for the containing element
+                        const contentData = window.wem._extractContentSignature(matchedElement);
+
+                        // Add click-specific properties
+                        contentData.clickedElement = clickedTag;
+                        contentData.clickedText = event.target.textContent?.trim().substring(0, 100) || null;
+                        contentData.isLink = !!isLink;
+                        contentData.isButton = !!isButton;
+
+                        // If clicked on a link, capture href
+                        if (isLink) {
+                            const link = event.target.tagName === 'A' ? event.target : event.target.closest('a');
+                            contentData.linkHref = link.href || null;
+                        }
+
+                        // Track the event
+                        window.wem.trackEvent('contentClick', contentData, matchedElement);
+                    }
+                }, { passive: true });
             },
 
             _detectScrollDepth: (threshold, callback) => {
@@ -575,10 +643,92 @@ waitForWemInit()
                     console.error('Failed to send events via XHR:', e);
                     return false;
                 }
+            },
+            // Helper method to extract distinguishing content features
+            _extractContentSignature: element => {
+                const result = {
+                    elementType: element.tagName.toLowerCase(),
+                    elementId: element.id || null,
+                    elementClasses: element.className || null,
+                    domPath: window.wem._getDomPath(element)
+                };
+
+                // Extract text content (limited length)
+                const textContent = element.textContent?.trim();
+                if (textContent) {
+                    result.textSnippet = textContent.substring(0, 100);
+                    result.textLength = textContent.length;
+                }
+
+                // Extract heading if present
+                const heading = element.querySelector('h1, h2, h3, h4, h5, h6');
+                if (heading) {
+                    result.headingText = heading.textContent?.trim().substring(0, 100);
+                }
+
+                // Extract image info if present
+                const images = element.querySelectorAll('img');
+                if (images.length) {
+                    result.hasImages = true;
+                    result.imageCount = images.length;
+                    if (images[0].src) {
+                        // Just store the filename part of the first image
+                        const imageSrc = images[0].src;
+                        result.firstImageSrc = imageSrc.substring(imageSrc.lastIndexOf('/') + 1);
+                    }
+                    if (images[0].alt) {
+                        result.firstImageAlt = images[0].alt.substring(0, 100);
+                    }
+                }
+
+                // Extract link info if present
+                const links = element.querySelectorAll('a');
+                if (links.length) {
+                    result.hasLinks = true;
+                    result.linkCount = links.length;
+                    // Just store the href of the first link
+                    if (links[0].href) {
+                        result.firstLinkHref = links[0].href;
+                        result.firstLinkText = links[0].textContent?.trim().substring(0, 100);
+                    }
+                }
+                return result;
+            },
+
+// Get DOM path as a unique position identifier
+            _getDomPath: element => {
+                const path = [];
+                while (element && element.nodeType === Node.ELEMENT_NODE) {
+                    let selector = element.nodeName.toLowerCase();
+                    if (element.id) {
+                        selector += `#${element.id}`;
+                        path.unshift(selector);
+                        break;
+                    } else {
+                        let sibling = element;
+                        let index = 1;
+
+                        while (sibling = sibling.previousElementSibling) {
+                            if (sibling.nodeName.toLowerCase() === selector) {
+                                index++;
+                            }
+                        }
+
+                        if (index > 1) {
+                            selector += `:nth-of-type(${index})`;
+                        }
+                    }
+
+                    path.unshift(selector);
+                    element = element.parentNode;
+                }
+
+                // Return shortened path (last 4 elements)
+                return path.slice(-4).join(' > ');
             }
         };
         console.log('Loaded jExperience extended tracker...');
     }).catch(error => {
-        console.error('Failed to initialize extended tracker:', error.message);
-    });
+    console.error('Failed to initialize extended tracker:', error.message);
+});
 
